@@ -19,9 +19,10 @@
 ## ==================================================================================== ##
 ## 
 gene_pheatmap <- function(data_long,valuename,sampleid,annotation_row=NULL) {
-  data_long$value = data_long[,valuename]
+  data_long <- data_long %>% mutate(value=unlist(data_long[,valuename]))
   exprdat = data_long%>%select(unique_id,sampleid,value)%>%spread(sampleid,value)
   exprdat = as.matrix(exprdat[,-1])
+  exprdat = exprdat[, match(sampleid, colnames(exprdat))]
   
   sampleDists <- dist(t(exprdat))
   sampleDistMatrix <- as.matrix(sampleDists)
@@ -38,25 +39,32 @@ gene_pheatmap <- function(data_long,valuename,sampleid,annotation_row=NULL) {
 
 gene_pcaplot <- function(data_long,valuename,sampleid,groupdat=NULL,colorfactor=NULL,shapefactor=NULL,
                          plot_sampleids=TRUE, pcnum=1:2, plottitle = "PCA Plot") {
-  data_long$value = data_long[,valuename]
+
+  data_long = data_long %>% rename(value = valuename)
   exprdat = data_long%>%select(unique_id,sampleid,value)%>%spread(sampleid,value)
   exprdat = as.matrix(exprdat[,-1])
+  exprdat = exprdat[,match(groupdat$sampleid, colnames(exprdat))]
   
   #adapted from DESeq2:::plotPCA.DESeqTransform
   pca <- prcomp(t(exprdat))
   percentVar <- pca$sdev^2/sum(pca$sdev^2)
   if(is.null(groupdat)) groupdat = data.frame("group"=rep(1,ncol(exprdat)))
   intgroup = colnames(groupdat)
-  allgroup <- if (length(intgroup) > 1) {
-    factor(apply(groupdat, 1, paste, collapse = ":"))
-  }else{allgroup <- intgroup}
+  if (length(intgroup) > 1) {
+    allgroup <- factor(apply(groupdat, 1, paste, collapse = ":"))
+  }else{
+    allgroup <- intgroup
+  }
   d <- data.frame(PC1 = pca$x[, pcnum[1]], PC2 = pca$x[, pcnum[2]], uniquegroup = allgroup, 
                   groupdat, name = sampleid)
   percentVar <- round(100 * percentVar)
-  if(is.null(colorfactor)) {d$color=as.factor(1)}else{
-    colnames(d)[colnames(d)==colorfactor] <- "color"}
+  if(is.null(colorfactor)) {
+    d$color=as.factor(1)
+  }else{
+    colnames(d)[which(colnames(d)==colorfactor)] <- "color"
+  }
   if(is.null(shapefactor)) {d$shape=as.factor(1)}else{
-    colnames(d)[colnames(d)==shapefactor] <- "shape"
+    colnames(d)[which(colnames(d)==shapefactor)] <- "shape"
   }
   if(identical(shapefactor,colorfactor)) {d$shape = d$color}
   p <- ggplot(d, aes(PC1, PC2, color=color, shape=shape, size=3)) 
@@ -79,7 +87,6 @@ gene_pcaplot <- function(data_long,valuename,sampleid,groupdat=NULL,colorfactor=
   p <- p + guides(size= "none") + theme_bw() + 
     xlab(paste0("PC",pcnum[1],": ",percentVar[pcnum[1]],"% variance")) +
     ylab(paste0("PC",pcnum[2],": ",percentVar[pcnum[2]],"% variance")) + ggtitle(plottitle)
-  
   return(p)
 }
 
